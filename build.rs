@@ -1,10 +1,30 @@
 use bindgen::callbacks::EnumVariantValue;
 use convert_case::{Case, Casing};
 use std::path::PathBuf;
+use bindgen::callbacks::ItemInfo;
+use std::env;
+use std::path::Path;
 
 fn main() {
+    // get CPATH or default to empty
+    let cpath = env::var("CPATH").unwrap_or_default();
+    let mut include_dirs: Vec<&str> = cpath.split(':').collect();
+    include_dirs.push("/usr/include"); // fallback
+
+	// log the directories
+    //println!("cargo:warning=Searching for sane/sane.h in these directories:");
+    //for dir in &include_dirs {
+    //    println!("cargo:warning=  {}", dir);
+    //}
+
+    // find the first sane.h
+    let header_path = include_dirs.iter()
+        .map(|dir| Path::new(dir).join("sane/sane.h"))
+        .find(|p| p.exists())
+        .expect("Could not find sane/sane.h in any CPATH directory");
+
 	let bindings = bindgen::builder()
-		.header("/usr/include/sane/sane.h")
+		.header(header_path.to_string_lossy())
 		.rustified_enum("SANE_Unit")
 		.rustified_enum("SANE_Value_Type")
 		.rustified_enum("SANE_Constraint_Type")
@@ -58,10 +78,10 @@ impl bindgen::callbacks::ParseCallbacks for CamelCaseConverterCallback {
 		}
 	}
 
-	fn item_name(&self, original_item_name: &str) -> Option<String> {
-		let original_item_name = original_item_name
+	fn item_name(&self, original_item_name: ItemInfo<'_>) -> Option<String> {
+		let original_item_name = original_item_name.name
 			.strip_prefix("SANE_")
-			.unwrap_or(original_item_name);
+			.unwrap_or(original_item_name.name);
 		if original_item_name.contains('_')
 			&& original_item_name.to_case(Case::Snake) != original_item_name
 			&& original_item_name.to_case(Case::UpperSnake) != original_item_name
